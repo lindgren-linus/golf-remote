@@ -100,7 +100,7 @@ Exponera inte porten på offentliga nätverk eller via port-forwarding.
 
 Hämta den signerade Android-appen från den privata releasen:
 
-[GolfRemote-0.1.2.apk](https://github.com/lindgren-linus/golf-remote/releases/download/v0.1.2/GolfRemote-0.1.2.apk) · [alla releaser](https://github.com/lindgren-linus/golf-remote/releases)
+[GolfRemote-0.1.3.apk](https://github.com/lindgren-linus/golf-remote/releases/download/v0.1.3/GolfRemote-0.1.3.apk) · [alla releaser](https://github.com/lindgren-linus/golf-remote/releases)
 
 Öppna länken på Android-enheten, hämta APK-filen och godkänn **Tillåt från den här källan** när Android frågar. Appen är fristående: varken Expo Go eller en utvecklingsserver behövs efter installationen. Telefon och Windows-agent ska vara på samma Wi-Fi-nät. Du behöver vara inloggad på GitHub med åtkomst till det privata repot för att hämta filen.
 
