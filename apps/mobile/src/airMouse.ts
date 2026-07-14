@@ -13,7 +13,7 @@ export type AirMouseSettings = {
 }
 
 export const defaultAirMouseSettings: AirMouseSettings = {
-  sensitivity: 1.5,
+  sensitivity: 2,
   deadZoneDegreesPerSecond: 2,
   smoothing: 0.72,
   maxSpeedPixelsPerSecond: 3500,

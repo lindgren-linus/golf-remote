@@ -22,13 +22,16 @@ import { useRemoteConnection } from './src/useRemoteConnection'
 import { DiscoveredAgent, useServiceDiscovery } from './src/useServiceDiscovery'
 
 type TouchState = { x: number; y: number; startedAt: number; lastMovedAt: number; moved: boolean; twoFinger: boolean }
+type AirGestureState = { twoFinger: boolean; scrollY: number }
 const SENSITIVITY_KEY = 'golf-remote.touch-sensitivity-v2'
-const DEFAULT_SENSITIVITY = 3
+const DEFAULT_SENSITIVITY = 4.5
+const PREVIOUS_DEFAULT_SENSITIVITY = 3
 const MIN_SENSITIVITY = 0.5
 const MAX_SENSITIVITY = 12
 const SENSITIVITY_STEP = 0.25
 const AIR_SENSITIVITY_KEY = 'golf-remote.air-sensitivity-v1'
 const DEFAULT_AIR_SENSITIVITY = defaultAirMouseSettings.sensitivity
+const PREVIOUS_DEFAULT_AIR_SENSITIVITY = 1.5
 const MIN_AIR_SENSITIVITY = 0.3
 const MAX_AIR_SENSITIVITY = 4
 const AIR_SENSITIVITY_STEP = 0.05
@@ -59,6 +62,7 @@ export default function App() {
   const airLastSampleAt = useRef(0)
   const airTouchStartedAt = useRef(0)
   const airPointerTravel = useRef(0)
+  const airGesture = useRef<AirGestureState>({ twoFinger: false, scrollY: 0 })
   const [sensitivity, setSensitivity] = useState(DEFAULT_SENSITIVITY)
   const [airSensitivity, setAirSensitivity] = useState(DEFAULT_AIR_SENSITIVITY)
   const [controlMode, setControlMode] = useState<'touchpad' | 'airmouse'>('touchpad')
@@ -67,20 +71,30 @@ export default function App() {
   const [keyboardVisible, setKeyboardVisible] = useState(false)
   const [keyboardText, setKeyboardText] = useState('')
   const [manualConnection, setManualConnection] = useState(false)
+  const [userDisconnected, setUserDisconnected] = useState(false)
   const [connectedAgentName, setConnectedAgentName] = useState<string | null>(null)
 
   useEffect(() => {
     void Promise.all([AsyncStorage.getItem(SENSITIVITY_KEY), AsyncStorage.getItem(AIR_SENSITIVITY_KEY)]).then(([saved, savedAir]) => {
       const value = Number(saved)
-      if (Number.isFinite(value) && value >= MIN_SENSITIVITY && value <= MAX_SENSITIVITY) setSensitivity(value)
+      if (Number.isFinite(value) && value >= MIN_SENSITIVITY && value <= MAX_SENSITIVITY) {
+        const migrated = value === PREVIOUS_DEFAULT_SENSITIVITY ? DEFAULT_SENSITIVITY : value
+        setSensitivity(migrated)
+        if (migrated !== value) void AsyncStorage.setItem(SENSITIVITY_KEY, String(migrated))
+      }
       const airValue = Number(savedAir)
-      if (Number.isFinite(airValue) && airValue >= MIN_AIR_SENSITIVITY && airValue <= MAX_AIR_SENSITIVITY) setAirSensitivity(airValue)
+      if (Number.isFinite(airValue) && airValue >= MIN_AIR_SENSITIVITY && airValue <= MAX_AIR_SENSITIVITY) {
+        const migrated = airValue === PREVIOUS_DEFAULT_AIR_SENSITIVITY ? DEFAULT_AIR_SENSITIVITY : airValue
+        setAirSensitivity(migrated)
+        if (migrated !== airValue) void AsyncStorage.setItem(AIR_SENSITIVITY_KEY, String(migrated))
+      }
     })
   }, [])
 
   useEffect(() => () => airGyroscopeSubscription.current?.remove(), [])
 
   useEffect(() => {
+    if (userDisconnected) return
     if (discovery.agents.length !== 1) {
       if (discovery.agents.length === 0) automaticConnectionAttempt.current = null
       return
@@ -90,7 +104,7 @@ export default function App() {
     automaticConnectionAttempt.current = agent.id
     setConnectedAgentName(agent.name)
     void remote.connectTo(agent.host, agent.port, agent.id)
-  }, [discovery.agents, remote.connectTo, remote.status])
+  }, [discovery.agents, remote.connectTo, remote.status, userDisconnected])
 
   const panResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => remote.status === 'ansluten',
@@ -132,9 +146,21 @@ export default function App() {
 
   function connectToAgent(agent: DiscoveredAgent) {
     automaticConnectionAttempt.current = agent.id
+    setUserDisconnected(false)
     setConnectedAgentName(agent.name)
     setManualConnection(false)
     void remote.connectTo(agent.host, agent.port, agent.id)
+  }
+
+  function connectManually() {
+    setUserDisconnected(false)
+    automaticConnectionAttempt.current = null
+    remote.connect()
+  }
+
+  function disconnect() {
+    setUserDisconnected(true)
+    remote.disconnect()
   }
 
   async function enableAirMouse() {
@@ -219,6 +245,59 @@ export default function App() {
     if (wasTap) remote.send('pointer.click')
   }
 
+  function averageTouchY(event: GestureResponderEvent) {
+    const touches = event.nativeEvent.touches
+    if (touches.length === 0) return event.nativeEvent.pageY
+    return touches.reduce((sum, item) => sum + item.pageY, 0) / touches.length
+  }
+
+  function beginAirGesture(event: GestureResponderEvent) {
+    if (!connected) return
+    const twoFinger = event.nativeEvent.touches.length >= 2
+    airGesture.current = { twoFinger, scrollY: averageTouchY(event) }
+    if (twoFinger) {
+      airHeld.current = false
+      airFilter.current.reset()
+      flushPointerMove()
+    } else {
+      beginAirControl()
+    }
+  }
+
+  function moveAirGesture(event: GestureResponderEvent) {
+    if (event.nativeEvent.touches.length < 2) return
+    const nextY = averageTouchY(event)
+    if (!airGesture.current.twoFinger) {
+      airHeld.current = false
+      airFilter.current.reset()
+      flushPointerMove()
+      airGesture.current = { twoFinger: true, scrollY: nextY }
+      return
+    }
+
+    const dy = nextY - airGesture.current.scrollY
+    airGesture.current.scrollY = nextY
+    if (dy !== 0) remote.send('pointer.scroll', { delta: -dy * 12 })
+  }
+
+  function endAirGesture() {
+    if (airGesture.current.twoFinger) {
+      airHeld.current = false
+      airFilter.current.reset()
+      flushPointerMove()
+    } else {
+      endAirControl()
+    }
+    airGesture.current = { twoFinger: false, scrollY: 0 }
+  }
+
+  function cancelAirGesture() {
+    airHeld.current = false
+    airFilter.current.reset()
+    flushPointerMove()
+    airGesture.current = { twoFinger: false, scrollY: 0 }
+  }
+
   function point(event: GestureResponderEvent) {
     const native = event.nativeEvent
     const first = native.touches[0] ?? native
@@ -294,6 +373,8 @@ export default function App() {
 
   const connected = remote.status === 'ansluten'
   const usesManualOnly = discovery.status === 'unsupported'
+  const soleAgent = discovery.agents.length === 1 ? discovery.agents[0] : null
+  const connectionBusy = remote.status === 'ansluter' || remote.status === 'parkoppling krävs'
 
   return (
     <SafeAreaProvider>
@@ -310,7 +391,7 @@ export default function App() {
 
         {connected ? <View style={styles.connectionRow}>
           <Text style={styles.connectionName}>Ansluten till {connectedAgentName ?? remote.host}</Text>
-          <TouchableOpacity style={styles.connectButton} onPress={remote.disconnect}><Text style={styles.connectText}>Koppla från</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.connectButton} onPress={disconnect}><Text style={styles.connectText}>Koppla från</Text></TouchableOpacity>
         </View> : (manualConnection || usesManualOnly) ? <View style={styles.manualConnection}>
           {usesManualOnly ? <View style={styles.expoGoInfo}>
             <Text style={styles.expoGoTitle}>Expo Go-läge</Text>
@@ -319,12 +400,13 @@ export default function App() {
           <View style={styles.connectionRow}>
             <TextInput value={remote.host} onChangeText={remote.setHost} placeholder="Datorns IP-adress" placeholderTextColor="#8b95a5" keyboardType="numbers-and-punctuation" autoCapitalize="none" style={[styles.input, styles.hostInput]} />
             <TextInput value={remote.port} onChangeText={remote.setPort} placeholder="Port" placeholderTextColor="#8b95a5" keyboardType="number-pad" style={[styles.input, styles.portInput]} />
-            <TouchableOpacity style={styles.connectButton} onPress={remote.connect}><Text style={styles.connectText}>Anslut</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.connectButton} onPress={connectManually}><Text style={styles.connectText}>Anslut</Text></TouchableOpacity>
           </View>
           {!usesManualOnly ? <TouchableOpacity onPress={() => setManualConnection(false)}><Text style={styles.manualLink}>Tillbaka till automatisk sökning</Text></TouchableOpacity> : null}
         </View> : <View style={styles.discoveryPanel}>
-          <Text style={styles.discoveryText}>{discovery.status === 'searching' ? 'Söker efter simulator-datorer på nätverket…' : discovery.status === 'unsupported' ? 'Automatisk upptäckt är inte tillgänglig i Expo Go.' : discovery.agents.length === 0 ? 'Ingen simulator-dator hittades på nätverket.' : discovery.agents.length === 1 ? 'Simulator-dator hittad — ansluter…' : 'Välj simulator-dator:'}</Text>
-          {discovery.agents.length > 1 ? discovery.agents.map((agent) => <AgentButton key={agent.id} agent={agent} onPress={() => connectToAgent(agent)} />) : null}
+          <Text style={styles.discoveryText}>{discovery.status === 'searching' ? 'Söker efter Golf Remote-datorer på nätverket…' : discovery.status === 'unsupported' ? 'Automatisk upptäckt är inte tillgänglig i Expo Go.' : discovery.agents.length === 0 ? 'Ingen Golf Remote-dator hittades på nätverket.' : connectionBusy ? remote.status === 'parkoppling krävs' ? 'Väntar på att parkopplingen godkänns på datorn…' : `Ansluter till ${soleAgent?.name ?? 'datorn'}…` : discovery.agents.length === 1 ? `${soleAgent?.name ?? 'Datorn'} är tillgänglig.` : 'Välj dator:'}</Text>
+          {soleAgent && !connectionBusy ? <AgentButton agent={soleAgent} actionLabel={userDisconnected ? 'Återanslut' : 'Anslut'} onPress={() => connectToAgent(soleAgent)} /> : null}
+          {discovery.agents.length > 1 ? discovery.agents.map((agent) => <AgentButton key={agent.id} agent={agent} actionLabel="Anslut" onPress={() => connectToAgent(agent)} />) : null}
           <TouchableOpacity onPress={() => setManualConnection(true)}><Text style={styles.manualLink}>Anslut manuellt med IP-adress</Text></TouchableOpacity>
         </View>}
 
@@ -338,15 +420,18 @@ export default function App() {
 
         {controlMode === 'touchpad' ? <View {...panResponder.panHandlers} style={[styles.touchpad, !connected && styles.touchpadDisabled]}>
           <Text style={styles.touchpadText}>{connected ? 'TOUCHPAD\nDra för att flytta · tryck för klick\nTvå fingrar för scroll' : 'Anslut till agenten för att börja'}</Text>
-        </View> : <TouchableOpacity
-          disabled={!connected}
-          activeOpacity={0.82}
-          onPressIn={beginAirControl}
-          onPressOut={endAirControl}
+        </View> : <View
+          onStartShouldSetResponder={() => connected}
+          onMoveShouldSetResponder={() => connected}
+          onResponderGrant={beginAirGesture}
+          onResponderMove={moveAirGesture}
+          onResponderRelease={endAirGesture}
+          onResponderTerminate={cancelAirGesture}
+          onResponderTerminationRequest={() => false}
           style={[styles.touchpad, styles.airMousePad, !connected && styles.touchpadDisabled]}
         >
-          <Text style={styles.touchpadText}>{connected ? 'AIR MOUSE\nDutta för vänsterklick · håll ned och vrid för att styra\nSläpp för att frysa och återcentrera' : 'Anslut till agenten för att börja'}</Text>
-        </TouchableOpacity>}
+          <Text style={styles.touchpadText}>{connected ? 'AIR MOUSE\nDutta för vänsterklick · håll ned och vrid för att styra\nTvå fingrar för scroll · släpp för att frysa' : 'Anslut till agenten för att börja'}</Text>
+        </View>}
 
         <View style={styles.modeRow}>
           <TouchableOpacity style={[styles.modeButton, controlMode === 'touchpad' && styles.modeButtonActive]} onPress={enableTouchpad}><Text style={styles.modeButtonText}>Touchpad</Text></TouchableOpacity>
@@ -390,10 +475,11 @@ function DisplayButton({ display, active, onPress }: { display: DisplayInfo; act
   </TouchableOpacity>
 }
 
-function AgentButton({ agent, onPress }: { agent: DiscoveredAgent; onPress: () => void }) {
+function AgentButton({ agent, actionLabel, onPress }: { agent: DiscoveredAgent; actionLabel: string; onPress: () => void }) {
   return <TouchableOpacity style={styles.agentButton} onPress={onPress}>
     <Text style={styles.agentName}>{agent.name}</Text>
     <Text style={styles.agentMeta}>{agent.host}:{agent.port}</Text>
+    <Text style={styles.agentAction}>{actionLabel}</Text>
   </TouchableOpacity>
 }
 
@@ -416,7 +502,7 @@ function SettingsModal({ visible, sensitivity, airSensitivity, clientName, onCha
         </View>
         <Text style={styles.settingRange}>0,50× till 12,00× · steg om 0,25</Text>
         <Text style={styles.settingPrecision}>Adaptiv precision är på: långsamma dragningar blir finare, snabba svep använder full känslighet.</Text>
-        <TouchableOpacity style={styles.resetButton} onPress={() => onChange(DEFAULT_SENSITIVITY)}><Text style={styles.resetButtonText}>Återställ till 3,00×</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.resetButton} onPress={() => onChange(DEFAULT_SENSITIVITY)}><Text style={styles.resetButtonText}>Återställ till {DEFAULT_SENSITIVITY.toFixed(2).replace('.', ',')}×</Text></TouchableOpacity>
         <View style={styles.settingDivider} />
         <Text style={styles.settingLabel}>Air mouse-känslighet</Text>
         <Text style={styles.settingHelp}>Påverkar hur snabbt pekaren rör sig när du vrider telefonen medan du håller ned air mouse-ytan.</Text>
@@ -512,6 +598,7 @@ const styles = StyleSheet.create({
   agentButton: { backgroundColor: '#27435f', borderRadius: 10, padding: 12 },
   agentName: { color: 'white', fontWeight: '800', fontSize: 16 },
   agentMeta: { color: '#b7c9dc', marginTop: 3, fontSize: 12 },
+  agentAction: { color: '#7dbbff', marginTop: 7, fontWeight: '800' },
   input: { color: '#eef4ff', backgroundColor: '#172231', borderColor: '#293b51', borderWidth: 1, borderRadius: 9, paddingHorizontal: 10, height: 44 },
   hostInput: { flex: 1 },
   portInput: { width: 66 },
