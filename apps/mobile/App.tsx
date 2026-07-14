@@ -5,6 +5,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import {
   GestureResponderEvent,
+  InputAccessoryView,
+  Keyboard,
   Modal,
   PanResponder,
   Platform,
@@ -31,6 +33,10 @@ const MIN_AIR_SENSITIVITY = 0.3
 const MAX_AIR_SENSITIVITY = 4
 const AIR_SENSITIVITY_STEP = 0.05
 const RADIANS_TO_DEGREES = 180 / Math.PI
+const AIR_TAP_MAX_DURATION_MS = 400
+const AIR_TAP_SETTLE_MS = 90
+const AIR_TAP_MOVEMENT_THRESHOLD = 22
+const KEYBOARD_ACCESSORY_ID = 'golf-remote-keyboard-accessory'
 
 // Sensitivity is the maximum gain for a quick swipe. Slow movement is deliberately
 // dampened, so placing the cursor precisely does not require changing settings.
@@ -52,7 +58,7 @@ export default function App() {
   const airHeld = useRef(false)
   const airLastSampleAt = useRef(0)
   const airTouchStartedAt = useRef(0)
-  const airMoved = useRef(false)
+  const airPointerTravel = useRef(0)
   const [sensitivity, setSensitivity] = useState(DEFAULT_SENSITIVITY)
   const [airSensitivity, setAirSensitivity] = useState(DEFAULT_AIR_SENSITIVITY)
   const [controlMode, setControlMode] = useState<'touchpad' | 'airmouse'>('touchpad')
@@ -171,8 +177,12 @@ export default function App() {
           verticalScale,
         })
         airLastSampleAt.current = now
+        // A thumb tap shakes the phone a little. Ignore that initial settling
+        // period so a normal, decisive tap is classified as a click rather
+        // than as a very short air-mouse movement.
+        if (now - airTouchStartedAt.current < AIR_TAP_SETTLE_MS) return
         if (move.dx !== 0 || move.dy !== 0) {
-          if (Math.hypot(move.dx, move.dy) > 1) airMoved.current = true
+          airPointerTravel.current += Math.hypot(move.dx, move.dy)
           queuePointerMove(move.dx, move.dy)
         }
       })
@@ -196,12 +206,13 @@ export default function App() {
     airFilter.current.reset()
     airLastSampleAt.current = Date.now()
     airTouchStartedAt.current = Date.now()
-    airMoved.current = false
+    airPointerTravel.current = 0
     airHeld.current = true
   }
 
   function endAirControl() {
-    const wasTap = !airMoved.current && Date.now() - airTouchStartedAt.current < 250
+    const pressDuration = Date.now() - airTouchStartedAt.current
+    const wasTap = pressDuration <= AIR_TAP_MAX_DURATION_MS && airPointerTravel.current < AIR_TAP_MOVEMENT_THRESHOLD
     airHeld.current = false
     airFilter.current.reset()
     flushPointerMove()
@@ -417,6 +428,15 @@ function SettingsModal({ visible, sensitivity, airSensitivity, onChange, onChang
 }
 
 function KeyboardModal({ visible, value, onChangeText, onKey, onClose }: { visible: boolean; value: string; onChangeText: (value: string) => void; onKey: (key: string) => void; onClose: () => void }) {
+  function dismissKeyboard() {
+    Keyboard.dismiss()
+  }
+
+  function closeModal() {
+    dismissKeyboard()
+    onClose()
+  }
+
   return <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
     <View style={styles.modalBackdrop}>
       <View style={styles.settingsPanel}>
@@ -429,8 +449,19 @@ function KeyboardModal({ visible, value, onChangeText, onKey, onClose }: { visib
           onChangeText={onChangeText}
           placeholder="Skriv här…"
           placeholderTextColor="#8b95a5"
+          returnKeyType="done"
+          onSubmitEditing={dismissKeyboard}
+          inputAccessoryViewID={Platform.OS === 'ios' ? KEYBOARD_ACCESSORY_ID : undefined}
           style={styles.keyboardInput}
         />
+        {Platform.OS === 'ios' ? <InputAccessoryView nativeID={KEYBOARD_ACCESSORY_ID}>
+          <View style={styles.keyboardAccessory}>
+            <Text style={styles.keyboardAccessoryText}>Tangentbord</Text>
+            <TouchableOpacity style={styles.keyboardAccessoryDone} onPress={dismissKeyboard}>
+              <Text style={styles.keyboardAccessoryDoneText}>Klar</Text>
+            </TouchableOpacity>
+          </View>
+        </InputAccessoryView> : null}
         <View style={styles.shortcutRow}>
           <Shortcut label="Esc" onPress={() => onKey('Escape')} />
           <Shortcut label="←" onPress={() => onKey('ArrowLeft')} />
@@ -443,7 +474,7 @@ function KeyboardModal({ visible, value, onChangeText, onKey, onClose }: { visib
           <Shortcut label="Mellanslag" wide onPress={() => onKey('Space')} />
           <Shortcut label="Enter" onPress={() => onKey('Enter')} />
         </View>
-        <TouchableOpacity style={styles.doneButton} onPress={onClose}><Text style={styles.doneButtonText}>Klar</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.doneButton} onPress={closeModal}><Text style={styles.doneButtonText}>Stäng tangentbord</Text></TouchableOpacity>
       </View>
     </View>
   </Modal>
@@ -518,6 +549,10 @@ const styles = StyleSheet.create({
   doneButton: { alignItems: 'center', backgroundColor: '#2e7eea', borderRadius: 10, padding: 15 },
   doneButtonText: { color: 'white', fontSize: 16, fontWeight: '800' },
   keyboardInput: { color: '#eef4ff', backgroundColor: '#0e1722', borderWidth: 1, borderColor: '#38526d', borderRadius: 10, minHeight: 52, paddingHorizontal: 13, fontSize: 18 },
+  keyboardAccessory: { backgroundColor: '#1b2d41', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#39536d', minHeight: 44, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  keyboardAccessoryText: { color: '#b7c9dc', fontWeight: '700' },
+  keyboardAccessoryDone: { paddingHorizontal: 10, paddingVertical: 7 },
+  keyboardAccessoryDoneText: { color: '#72baff', fontWeight: '800', fontSize: 16 },
   shortcutRow: { flexDirection: 'row', gap: 7 },
   shortcutButton: { flex: 1, minHeight: 44, borderRadius: 8, backgroundColor: '#294765', alignItems: 'center', justifyContent: 'center' },
   shortcutButtonWide: { flex: 2 },
