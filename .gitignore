@@ -1,0 +1,11 @@
+node_modules/
+.expo/
+**/.expo/
+dist/
+bin/
+obj/
+apps/windows-agent/artifacts/
+apps/mobile/android/
+*.user
+*.suo
+.vs/

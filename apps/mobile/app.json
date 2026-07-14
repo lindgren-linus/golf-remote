@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "Golf Remote",
+    "slug": "golf-remote",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Golf Remote hittar och ansluter till din lokala simulator-dator.",
+        "NSBonjourServices": [
+          "_golfremote._tcp"
+        ]
+      }
+    },
+    "android": {
+      "permissions": [
+        "android.permission.CHANGE_WIFI_MULTICAST_STATE",
+        "android.permission.HIGH_SAMPLING_RATE_SENSORS"
+      ],
+      "package": "com.linlind.golfremote"
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Golf Remote använder rörelsesensorer för air mouse."
+        }
+      ]
+    ]
+  }
+}
