@@ -96,7 +96,15 @@ Remove-NetFirewallRule -DisplayName "Golf Remote discovery (mDNS)"
 
 Exponera inte porten på offentliga nätverk eller via port-forwarding.
 
-## Installera mobilappen med automatisk upptäckt
+## Installera Android-appen
+
+Hämta den signerade Android-appen från den privata releasen:
+
+[GolfRemote-0.1.0.apk](https://github.com/lindgren-linus/golf-remote/releases/download/v0.1.0/GolfRemote-0.1.0.apk) · [alla releaser](https://github.com/lindgren-linus/golf-remote/releases)
+
+Öppna länken på Android-enheten, hämta APK-filen och godkänn **Tillåt från den här källan** när Android frågar. Appen är fristående: varken Expo Go eller en utvecklingsserver behövs efter installationen. Telefon och Windows-agent ska vara på samma Wi-Fi-nät. Du behöver vara inloggad på GitHub med åtkomst till det privata repot för att hämta filen.
+
+## Bygga mobilappen med automatisk upptäckt
 
 Automatisk upptäckt använder en native iOS/Android-modul och fungerar därför inte i Expo Go. I Expo Go visas i stället IP-adress och port direkt i appen, så att du kan ansluta manuellt till agenten. Bygg en Expo Development Build en gång per plattform för automatisk upptäckt:
 

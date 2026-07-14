@@ -37,6 +37,12 @@
           "motionPermission": "Golf Remote använder rörelsesensorer för air mouse."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "f48d6ead-12cc-4ff2-8be7-0148c384706e"
+      }
+    },
+    "owner": "linuslindgren"
   }
 }

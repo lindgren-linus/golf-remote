@@ -6,6 +6,7 @@ bin/
 obj/
 apps/windows-agent/artifacts/
 apps/mobile/android/
+apps/mobile/*.apk
 *.user
 *.suo
 .vs/
