@@ -2,11 +2,11 @@
 
 ## Hämta apparna
 
-Senaste utgåvan: [Golf Remote 0.1.0](https://github.com/lindgren-linus/golf-remote/releases/tag/v0.1.0)
+Senaste mobiluppdatering: [Golf Remote 0.1.1](https://github.com/lindgren-linus/golf-remote/releases/tag/v0.1.1)
 
 Windows-agent: [GolfRemote-Setup-0.1.0.exe](https://github.com/lindgren-linus/golf-remote/releases/download/v0.1.0/GolfRemote-Setup-0.1.0.exe)
 
-Android-app: [GolfRemote-0.1.0.apk](https://github.com/lindgren-linus/golf-remote/releases/download/v0.1.0/GolfRemote-0.1.0.apk)
+Android-app: [GolfRemote-0.1.1.apk](https://github.com/lindgren-linus/golf-remote/releases/download/v0.1.1/GolfRemote-0.1.1.apk)
 
 Repo och release är privata. Den som laddar ned behöver därför vara inloggad på GitHub och ha åtkomst till `lindgren-linus/golf-remote`.
 
