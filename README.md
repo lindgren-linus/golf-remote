@@ -34,9 +34,11 @@ docs/
 
 ## Installera Windows-agenten
 
-Den färdiga installationsfilen finns här efter ett produktionsbygge:
+Hämta den färdiga installationsfilen från den privata GitHub-releasen:
 
-[`GolfRemote-Setup-0.1.0.exe`](apps/windows-agent/artifacts/installer/GolfRemote-Setup-0.1.0.exe)
+[GolfRemote-Setup-0.1.0.exe](https://github.com/lindgren-linus/golf-remote/releases/download/v0.1.0/GolfRemote-Setup-0.1.0.exe) · [alla releaser](https://github.com/lindgren-linus/golf-remote/releases)
+
+Du behöver vara inloggad på GitHub med åtkomst till repot för att hämta filen.
 
 Kör installationen som administratör. Den:
 
