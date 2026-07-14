@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Crypto from 'expo-crypto'
+import * as Device from 'expo-device'
 import * as SecureStore from 'expo-secure-store'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createMessage, DisplayInfo, Envelope } from './protocol'
@@ -7,12 +8,18 @@ import { createMessage, DisplayInfo, Envelope } from './protocol'
 const SAVED_HOST_KEY = 'golf-remote.last-host'
 const SAVED_PORT_KEY = 'golf-remote.last-port'
 const CLIENT_ID_KEY = 'golf-remote.client-id'
+const CLIENT_NAME_KEY = 'golf-remote.client-name'
 const TOKEN_KEY_PREFIX = 'golf-remote.agent-token.'
 
 export type ConnectionStatus = 'frånkopplad' | 'ansluter' | 'parkoppling krävs' | 'ansluten' | 'fel'
 
 function tokenKey(agentId: string) {
   return `${TOKEN_KEY_PREFIX}${agentId}`
+}
+
+function defaultClientName() {
+  const deviceName = Device.deviceName?.trim() || Device.modelName?.trim()
+  return deviceName ? `Golf Remote — ${deviceName}`.slice(0, 64) : 'Golf Remote-enhet'
 }
 
 async function getOrCreateClientId() {
@@ -34,15 +41,17 @@ export function useRemoteConnection() {
   const retriedStoredToken = useRef(false)
   const [host, setHost] = useState('')
   const [port, setPort] = useState('56789')
+  const [clientName, setClientNameState] = useState(defaultClientName)
   const [status, setStatus] = useState<ConnectionStatus>('frånkopplad')
   const [error, setError] = useState<string | null>(null)
   const [displays, setDisplays] = useState<DisplayInfo[]>([])
   const [activeDisplayId, setActiveDisplayId] = useState<string | null>(null)
 
   useEffect(() => {
-    void Promise.all([AsyncStorage.getItem(SAVED_HOST_KEY), AsyncStorage.getItem(SAVED_PORT_KEY)]).then(([savedHost, savedPort]) => {
+    void Promise.all([AsyncStorage.getItem(SAVED_HOST_KEY), AsyncStorage.getItem(SAVED_PORT_KEY), AsyncStorage.getItem(CLIENT_NAME_KEY)]).then(([savedHost, savedPort, savedClientName]) => {
       if (savedHost) setHost(savedHost)
       if (savedPort) setPort(savedPort)
+      if (savedClientName?.trim()) setClientNameState(savedClientName.slice(0, 64))
     })
     return () => socket.current?.close()
   }, [])
@@ -52,6 +61,12 @@ export function useRemoteConnection() {
     const nextSequence = includeSequence ? ++sequence.current : undefined
     socket.current.send(JSON.stringify(createMessage(type, payload, nextSequence)))
     return true
+  }, [])
+
+  const setClientName = useCallback((value: string) => {
+    const next = value.slice(0, 64)
+    setClientNameState(next)
+    void AsyncStorage.setItem(CLIENT_NAME_KEY, next)
   }, [])
 
   const connectTo = useCallback(async (targetHost: string, targetPort: string | number, discoveredAgentId?: string) => {
@@ -119,7 +134,8 @@ export function useRemoteConnection() {
                 return
               }
               pairingRequested.current = true
-              ws.send(JSON.stringify(createMessage('client.pair.request', { clientId: currentClientId, clientName: 'Golf Remote Mobile' })))
+              const pairingName = clientName.trim() || defaultClientName()
+              ws.send(JSON.stringify(createMessage('client.pair.request', { clientId: currentClientId, clientName: pairingName })))
             }).catch(() => {
               setStatus('fel')
               setError('Kunde inte läsa den säkra parkopplingen på telefonen.')
@@ -161,7 +177,7 @@ export function useRemoteConnection() {
       setStatus('fel')
       setError('Kunde inte förbereda den säkra parkopplingen på telefonen.')
     }
-  }, [])
+  }, [clientName])
 
   const connect = useCallback(() => void connectTo(host, port), [connectTo, host, port])
 
@@ -175,5 +191,5 @@ export function useRemoteConnection() {
     if (send('display.select', { displayId: display.id })) setActiveDisplayId(display.id)
   }, [send])
 
-  return { host, setHost, port, setPort, status, error, displays, activeDisplayId, connect, connectTo, disconnect, selectDisplay, send }
+  return { host, setHost, port, setPort, clientName, setClientName, status, error, displays, activeDisplayId, connect, connectTo, disconnect, selectDisplay, send }
 }

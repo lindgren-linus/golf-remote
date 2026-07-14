@@ -365,8 +365,10 @@ export default function App() {
           visible={settingsVisible}
           sensitivity={sensitivity}
           airSensitivity={airSensitivity}
+          clientName={remote.clientName}
           onChange={updateSensitivity}
           onChangeAir={updateAirSensitivity}
+          onChangeClientName={remote.setClientName}
           onClose={() => setSettingsVisible(false)}
         />
         <KeyboardModal
@@ -395,11 +397,16 @@ function AgentButton({ agent, onPress }: { agent: DiscoveredAgent; onPress: () =
   </TouchableOpacity>
 }
 
-function SettingsModal({ visible, sensitivity, airSensitivity, onChange, onChangeAir, onClose }: { visible: boolean; sensitivity: number; airSensitivity: number; onChange: (value: number) => void; onChangeAir: (value: number) => void; onClose: () => void }) {
+function SettingsModal({ visible, sensitivity, airSensitivity, clientName, onChange, onChangeAir, onChangeClientName, onClose }: { visible: boolean; sensitivity: number; airSensitivity: number; clientName: string; onChange: (value: number) => void; onChangeAir: (value: number) => void; onChangeClientName: (value: string) => void; onClose: () => void }) {
   return <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
     <View style={styles.modalBackdrop}>
       <View style={styles.settingsPanel}>
         <Text style={styles.settingsTitle}>Inställningar</Text>
+        <Text style={styles.settingLabel}>Enhetsnamn för parkoppling</Text>
+        <Text style={styles.settingHelp}>Visas i Windows-dialogen och listan över parade enheter. På iPhone kan Apple dölja det personliga telefonnamnet, så du kan alltid skriva ett tydligt eget namn här.</Text>
+        <TextInput value={clientName} onChangeText={onChangeClientName} maxLength={64} placeholder="Till exempel Linus iPhone" placeholderTextColor="#8b95a5" style={styles.settingsInput} />
+        <Text style={styles.settingRange}>Namnet används nästa gång enheten parkopplas. Återkalla en befintlig parkoppling på datorn och anslut igen för att byta namn där.</Text>
+        <View style={styles.settingDivider} />
         <Text style={styles.settingLabel}>Touchkänslighet</Text>
         <Text style={styles.settingHelp}>Påverkar hur långt musen rör sig för varje fingerdragning.</Text>
         <View style={styles.sensitivityRow}>
@@ -548,6 +555,7 @@ const styles = StyleSheet.create({
   resetButtonText: { color: '#9dcbfa', fontWeight: '700' },
   doneButton: { alignItems: 'center', backgroundColor: '#2e7eea', borderRadius: 10, padding: 15 },
   doneButtonText: { color: 'white', fontSize: 16, fontWeight: '800' },
+  settingsInput: { color: '#eef4ff', backgroundColor: '#0e1722', borderWidth: 1, borderColor: '#38526d', borderRadius: 10, minHeight: 48, paddingHorizontal: 13, fontSize: 16 },
   keyboardInput: { color: '#eef4ff', backgroundColor: '#0e1722', borderWidth: 1, borderColor: '#38526d', borderRadius: 10, minHeight: 52, paddingHorizontal: 13, fontSize: 18 },
   keyboardAccessory: { backgroundColor: '#1b2d41', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#39536d', minHeight: 44, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   keyboardAccessoryText: { color: '#b7c9dc', fontWeight: '700' },
