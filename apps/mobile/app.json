@@ -6,12 +6,19 @@
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "ios": {
+      "bundleIdentifier": "com.linlind.golfremote",
       "supportsTablet": true,
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "infoPlist": {
-        "NSLocalNetworkUsageDescription": "Golf Remote hittar och ansluter till din lokala simulator-dator.",
+        "NSLocalNetworkUsageDescription": "Golf Remote hittar och ansluter till din Windows-dator på det lokala nätverket.",
         "NSBonjourServices": [
           "_golfremote._tcp"
-        ]
+        ],
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
       }
     },
     "android": {
